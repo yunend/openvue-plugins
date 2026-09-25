@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Easy Office Viewer</title>
+</head>
+<body>
+    <div id="container"></div>
+    <script>
+        function getQueryParams() {
+            return new URLSearchParams(location.search);
+        }
+
+        window.addEventListener('DOMContentLoaded', function () {
+            const queryParams = getQueryParams();
+            const filePath = queryParams.get('path');
+
+            if (!filePath) {
+                document.getElementById('container').innerHTML = '<p>请通过 path 参数指定 Office 文件路径</p>';
+                return;
+            }
+
+            const fullUrl = window.location.origin + filePath;
+            const viewUrl = 'https://view.officeapps.live.com/op/view.aspx?src='
+                + encodeURIComponent(fullUrl);
+
+            window.location.href = viewUrl;
+        });
+    </script>
+</body>
+</html>
