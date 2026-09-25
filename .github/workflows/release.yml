@@ -75,7 +75,7 @@ jobs:
                "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
 
             # 收集元数据：直接提取 plugin.json 的必要字段
-            PLUGIN_META=$(jq -c '{id, name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, downloadSources}' "$plugin_file")
+            PLUGIN_META=$(jq -c '{id: (id + "-" + version), name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, downloadSources}' "$plugin_file")
             PLUGINS_JSON=$(echo "$PLUGINS_JSON" | jq --argjson meta "$PLUGIN_META" '. + [$meta]')
           done
 

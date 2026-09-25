@@ -1,6 +1,6 @@
 {
   "id": "office-easy",
-  "name": "Office 文档查看器 / Office Viewer",
+  "name": "Office 简单查看器 / Office Easy Viewer",
   "version": "0.0.1",
   "description": "在线简易Office 文档查看器 / Office Viewer Easy Online",
   "extensions": ["doc", "docx", "ppt", "pptx", "xls", "xlsx"],
