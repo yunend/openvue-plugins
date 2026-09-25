@@ -107,17 +107,73 @@ jobs:
           echo "📄 汇总文件已生成: plugins-index.json"
           cat plugins-index.json
 
+          # 生成 Release body (Markdown 表格)
+          echo "## 🚀 Plugins Release ${RELEASE_TAG}" > release_body.md
+          echo "" >> release_body.md
+          echo "| 插件ID | 名称 | 版本 | 大小 | SHA256 |" >> release_body.md
+          echo "|--------|------|------|------|--------|" >> release_body.md
+          echo "$PLUGINS_JSON" | jq -r '.[] | [.id, .name, .version, (.sizeBytes | tostring + " bytes"), .sha256[0:16] + "..."] | @tsv' |
+            while IFS=
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Plugins Release ${{ env.RELEASE_TAG }}
           tag_name: ${{ env.RELEASE_TAG }}
-          body: |
-            ## 🚀 Plugins Release ${{ env.RELEASE_TAG }}
+          body_path: release_body.md
+          files: |
+            plugins-index.json
+            **/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            | 插件 | 版本 | 大小 | SHA256 |
-            |------|------|------|--------|
-            $(jq -r '.[] | "| \(.id) | \(.version) | \(.sizeBytes) bytes | `\(.sha256[:16])...` |"' plugins-index.json | tr '\n' '\n')
+      - name: Push plugins index to data branch
+        shell: bash
+        run: |
+          BRANCH_NAME="plugins-data"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 将汇总文件移到临时位置
+          cp plugins-index.json /tmp/plugins-index.json
+
+          # 切换到/创建 data 分支
+          if git ls-remote --exit-code --heads origin "refs/heads/${BRANCH_NAME}" > /dev/null 2>&1; then
+            git fetch origin "${BRANCH_NAME}"
+            git checkout "${BRANCH_NAME}"
+          else
+            git checkout --orphan "${BRANCH_NAME}"
+            git rm -rf . > /dev/null 2>&1 || true
+          fi
+
+          # 复制回汇总文件
+          cp /tmp/plugins-index.json .
+
+          # 提交并推送
+          git add plugins-index.json
+          if git commit -m "Update plugins index for ${{ env.RELEASE_TAG }}"; then
+            git push origin "${BRANCH_NAME}"
+            echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"
+          else
+            echo "ℹ️ 没有变更需要提交"
+          fi\t' read -r id name version size sha; do
+              echo "| $id | $name | $version | $size | \`$sha\` |" >> release_body.md
+            done
+          echo "" >> release_body.md
+          echo "---" >> release_body.md
+          echo "📦 下载链接: https://github.com/${REPO}/releases/tag/${RELEASE_TAG}" >> release_body.md
+          echo "📄 汇总文件: plugins-index.json" >> release_body.md
+          echo "✅ Release body 已生成: release_body.md"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Plugins Release ${{ env.RELEASE_TAG }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          body_path: release_body.md
           files: |
             plugins-index.json
             **/*.zip
