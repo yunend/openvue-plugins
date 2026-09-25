@@ -1,0 +1,13 @@
+{
+  "id": "office-vue",
+  "name": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+  "version": "1.0.0",
+  "description": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+  "extensions": ["docx", "pdf", "xlsx"],
+  "urlTemplate": "/plugins/{pluginId}/?path={publicPath}",
+  "homepage": "",
+  "downloadSources": [],
+  "sha256":"",
+  "archiveFormat": "zip",
+  "sizeBytes": 0
+}

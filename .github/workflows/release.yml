@@ -1,0 +1,159 @@
+name: Build and Release Plugins
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup environment
+        run: |
+          echo "RELEASE_TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
+      - name: Build plugins
+        shell: bash
+        run: |
+          set -e
+
+          RELEASE_TAG="${GITHUB_REF_NAME}"
+          REPO="${{ github.repository }}"
+          RELEASE_BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
+
+          PLUGINS_JSON="[]"
+          ZIP_LIST_FILE="${RUNNER_TEMP}/zip_list.txt"
+          > "$ZIP_LIST_FILE"
+
+          # 遍历第一级目录
+          for dir in */; do
+            dir="${dir%/}"
+            plugin_file="${dir}/plugin.json"
+            dist_dir="${dir}/dist-plugin"
+
+            if [ ! -f "$plugin_file" ]; then
+              echo "⚠️ 跳过 $dir: 没有 plugin.json"
+              continue
+            fi
+
+            if [ ! -d "$dist_dir" ]; then
+              echo "⚠️ 跳过 $dir: 没有 dist-plugin 目录"
+              continue
+            fi
+
+            echo "🔧 处理插件: $dir"
+
+            # 读取 plugin.json
+            PLUGIN_ID=$(jq -r '.id' "$plugin_file")
+            PLUGIN_VERSION=$(jq -r '.version' "$plugin_file")
+
+            echo "   ID: $PLUGIN_ID"
+            echo "   Version: $PLUGIN_VERSION"
+
+            # 构建 zip 文件名：{pluginId}-{version}.zip
+            ZIP_NAME="${PLUGIN_ID}-${PLUGIN_VERSION}.zip"
+            ZIP_PATH="${dir}/${ZIP_NAME}"
+
+            # 压缩 dist-plugin
+            (cd "$dir" && zip -r "$ZIP_NAME" "dist-plugin/" -x "*.git*" > /dev/null 2>&1)
+            echo "   ✅ 压缩完成: $ZIP_NAME"
+
+            # 计算 SHA256
+            SHA256_VALUE=$(sha256sum "$ZIP_PATH" | cut -d' ' -f1)
+            echo "   SHA256: $SHA256_VALUE"
+
+            # 获取文件大小 (bytes)
+            SIZE_BYTES=$(stat -c%s "$ZIP_PATH")
+            echo "   Size: $SIZE_BYTES bytes"
+
+            # 构建 downloadSources 条目
+            DOWNLOAD_URL="${RELEASE_BASE_URL}/${ZIP_NAME}"
+            DOWNLOAD_SOURCE=$(jq -n \
+              --arg url "$DOWNLOAD_URL" \
+              --arg tag "$RELEASE_TAG" \
+              '{type: "github-release", url: $url, tag: $tag}')
+
+            # 更新 plugin.json
+            jq --arg sha256 "$SHA256_VALUE" \
+               --argjson size $SIZE_BYTES \
+               --argjson source "$DOWNLOAD_SOURCE" \
+               '.sha256 = $sha256 | .sizeBytes = $size | .downloadSources = [$source]' \
+               "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
+            echo "   ✅ plugin.json 已更新"
+
+            # 收集插件元数据（加入 downloadUrl 和 zipName）
+            PLUGIN_META=$(jq -c \
+              --arg downloadUrl "$DOWNLOAD_URL" \
+              --arg zipName "$ZIP_NAME" \
+              '. + {downloadUrl: $downloadUrl, zipName: $zipName}' \
+              "$plugin_file")
+            PLUGINS_JSON=$(echo "$PLUGINS_JSON" | jq --argjson meta "$PLUGIN_META" '. + [$meta]')
+
+            # 记录 zip 路径
+            echo "${ZIP_PATH}" >> "$ZIP_LIST_FILE"
+          done
+
+          # 生成汇总文件
+          echo "$PLUGINS_JSON" > plugins-index.json
+          echo "📄 汇总文件已生成: plugins-index.json"
+          cat plugins-index.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Plugins Release ${{ env.RELEASE_TAG }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          body: |
+            ## 🚀 Plugins Release ${{ env.RELEASE_TAG }}
+
+            | 插件 | 版本 | 大小 | SHA256 |
+            |------|------|------|--------|
+            $(jq -r '.[] | "| \(.id) | \(.version) | \(.sizeBytes) bytes | `\(.sha256[:16])...` |"' plugins-index.json | tr '\n' '\n')
+          files: |
+            plugins-index.json
+            **/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push plugins index to data branch
+        shell: bash
+        run: |
+          BRANCH_NAME="plugins-data"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 将汇总文件移到临时位置
+          cp plugins-index.json /tmp/plugins-index.json
+
+          # 切换到/创建 data 分支
+          if git ls-remote --exit-code --heads origin "refs/heads/${BRANCH_NAME}" > /dev/null 2>&1; then
+            git fetch origin "${BRANCH_NAME}"
+            git checkout "${BRANCH_NAME}"
+          else
+            git checkout --orphan "${BRANCH_NAME}"
+            git rm -rf . > /dev/null 2>&1 || true
+          fi
+
+          # 复制回汇总文件
+          cp /tmp/plugins-index.json .
+
+          # 提交并推送
+          git add plugins-index.json
+          if git commit -m "Update plugins index for ${{ env.RELEASE_TAG }}"; then
+            git push origin "${BRANCH_NAME}"
+            echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"
+          else
+            echo "ℹ️ 没有变更需要提交"
+          fi
