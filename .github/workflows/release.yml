@@ -135,28 +135,3 @@ jobs:
           # --force 覆盖远程分支（无论是否存在）
           git push origin "${BRANCH_NAME}" --force
           echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"
-        shell: bash
-        run: |
-          BRANCH_NAME="plugins-data"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          cp plugins-index.json /tmp/plugins-index.json
-
-          if git ls-remote --exit-code --heads origin "refs/heads/${BRANCH_NAME}" > /dev/null 2>&1; then
-            git fetch origin "${BRANCH_NAME}"
-            git checkout "${BRANCH_NAME}"
-          else
-            git checkout --orphan "${BRANCH_NAME}"
-            git rm -rf . > /dev/null 2>&1 || true
-          fi
-
-          cp /tmp/plugins-index.json .
-          git add plugins-index.json
-          if git commit -m "Update plugins index for ${{ env.RELEASE_TAG }}"; then
-            git push origin "${BRANCH_NAME}"
-            echo "汇总文件已推送到分支: ${BRANCH_NAME}"
-          else
-            echo "没有变更需要提交"
-          fi
