@@ -60,22 +60,22 @@ jobs:
             SIZE_BYTES=$(stat -c%s "$ZIP_PATH")
 
             DOWNLOAD_URL="${RELEASE_BASE_URL}/${ZIP_NAME}"
-            DOWNLOAD_SOURCE=$(jq -n \
-              --arg url "$DOWNLOAD_URL" \
-              --arg tag "$RELEASE_TAG" \
-              '{type: "github-release", url: $url, tag: $tag}')
 
+            # 更新 plugin.json:
+            # 1) sha256 / sizeBytes
+            # 2) downloadSources: 如果已有 label=GitHub 则更新 url，否则追加
             jq --arg sha256 "$SHA256_VALUE" \
                --argjson size $SIZE_BYTES \
-               --argjson source "$DOWNLOAD_SOURCE" \
-               '.sha256 = $sha256 | .sizeBytes = $size | .downloadSources = [$source]' \
+               --arg url "$DOWNLOAD_URL" \
+              '(.downloadSources | map(.label) | index("GitHub")) as $idx |
+               if $idx then .downloadSources[$idx].url = $url
+               else .downloadSources += [{"label": "GitHub", "url": $url, "priority": 1}]
+               end |
+               .sha256 = $sha256 | .sizeBytes = $size' \
                "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
 
-            PLUGIN_META=$(jq -c \
-              --arg downloadUrl "$DOWNLOAD_URL" \
-              --arg zipName "$ZIP_NAME" \
-              '. + {downloadUrl: $downloadUrl, zipName: $zipName}' \
-              "$plugin_file")
+            # 收集元数据：直接提取 plugin.json 的必要字段
+            PLUGIN_META=$(jq -c '{id, name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, downloadSources}' "$plugin_file")
             PLUGINS_JSON=$(echo "$PLUGINS_JSON" | jq --argjson meta "$PLUGIN_META" '. + [$meta]')
           done
 
