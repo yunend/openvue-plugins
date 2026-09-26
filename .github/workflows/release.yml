@@ -60,17 +60,23 @@ jobs:
             SIZE_BYTES=$(stat -c%s "$ZIP_PATH")
 
             DOWNLOAD_URL="${RELEASE_BASE_URL}/${ZIP_NAME}"
+            PROXY_DOWNLOAD_URL="https://gh-proxy.com/${DOWNLOAD_URL}"
 
             # 更新 plugin.json:
             # 1) sha256 / sizeBytes
-            # 2) downloadSources: 如果已有 label=GitHub 则更新 url，否则追加
+            # 2) downloadSources: 更新 GitHub 源，追加 Github Proxy 源
             jq --arg sha256 "$SHA256_VALUE" \
                --argjson size $SIZE_BYTES \
                --arg url "$DOWNLOAD_URL" \
-              '(.downloadSources | map(.label) | index("GitHub")) as $idx |
-               if $idx then .downloadSources[$idx].url = $url
-               else .downloadSources += [{"label": "GitHub", "url": $url, "priority": 1}]
-               end |
+               --arg proxy_url "$PROXY_DOWNLOAD_URL" \
+              '(.downloadSources | map(.label) | index("GitHub")) as $github_idx |
+               (.downloadSources | map(.label) | index("Github Proxy")) as $proxy_idx |
+               (if $github_idx then .downloadSources[$github_idx].url = $url
+                else .downloadSources += [{"label": "GitHub", "url": $url, "priority": 1}]
+                end) |
+               (if $proxy_idx then .downloadSources[$proxy_idx].url = $proxy_url
+                else .downloadSources += [{"label": "Github Proxy", "url": $proxy_url, "priority": 2}]
+                end) |
                .sha256 = $sha256 | .sizeBytes = $size' \
                "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
 
