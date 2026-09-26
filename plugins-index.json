@@ -1,0 +1,59 @@
+[
+  {
+    "id": "office-easy-0.0.1",
+    "name": "Office 简单查看器 / Office Easy Viewer",
+    "version": "0.0.1",
+    "description": "在线简易Office 文档查看器 / Office Viewer Easy Online",
+    "extensions": [
+      "doc",
+      "docx",
+      "ppt",
+      "pptx",
+      "xls",
+      "xlsx"
+    ],
+    "urlTemplate": "/plugins/{pluginId}/?path={publicPath}",
+    "sha256": "e261d6162b91991c64128293660dd682823a19ec411eca0fe280f4bfe54292c6",
+    "sizeBytes": 838,
+    "archiveFormat": "zip",
+    "downloadSources": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-easy-0.0.1.zip",
+        "priority": 1
+      },
+      {
+        "label": "Github Proxy",
+        "url": "https://gh-proxy.com/https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-easy-0.0.1.zip",
+        "priority": 2
+      }
+    ]
+  },
+  {
+    "id": "office-vue-1.0.0",
+    "name": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+    "version": "1.0.0",
+    "description": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+    "extensions": [
+      "docx",
+      "pdf",
+      "xlsx"
+    ],
+    "urlTemplate": "/plugins/{pluginId}/?path={publicPath}",
+    "sha256": "b6fe10d6e5f850469a66c5aea26c85c8ff82446ddb60a189f0eba4d0797c9862",
+    "sizeBytes": 1350818,
+    "archiveFormat": "zip",
+    "downloadSources": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-vue-1.0.0.zip",
+        "priority": 1
+      },
+      {
+        "label": "Github Proxy",
+        "url": "https://gh-proxy.com/https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-vue-1.0.0.zip",
+        "priority": 2
+      }
+    ]
+  }
+]
