@@ -54,7 +54,7 @@ jobs:
             ZIP_NAME="${PLUGIN_ID}-${PLUGIN_VERSION}.zip"
             ZIP_PATH="${dir}/${ZIP_NAME}"
 
-            (cd "$dir" && zip -r "$ZIP_NAME" "dist-plugin/" -x "*.git*" > /dev/null 2>&1)
+            (cd "$dir" && find "dist-plugin/" -exec touch -t 202401010000 {} \; && zip -X -r "$ZIP_NAME" "dist-plugin/" -x "*.git*" > /dev/null 2>&1)
 
             SHA256_VALUE=$(sha256sum "$ZIP_PATH" | cut -d' ' -f1)
             SIZE_BYTES=$(stat -c%s "$ZIP_PATH")
