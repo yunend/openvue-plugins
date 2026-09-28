@@ -170,46 +170,4 @@ jobs:
 
           # --force 覆盖远程分支（无论是否存在）
           git push origin "${BRANCH_NAME}" --force
-          echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"\t' read -r id name ver size sha; do
-                echo "| $id | $name | $ver | ${size} bytes | \`${sha}...\` |"
-              done
-            echo ""
-            echo "---"
-            echo "Download: https://github.com/${REPO}/releases/tag/${RELEASE_TAG}"
-          } > release_body.md
-          echo "Release body 已生成"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Plugins Release ${{ env.RELEASE_TAG }}
-          tag_name: ${{ env.RELEASE_TAG }}
-          body_path: release_body.md
-          files: release-zips/*.zip
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push plugins index to data branch
-        shell: bash
-        run: |
-          BRANCH_NAME="plugins-data"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 备份汇总文件
-          cp plugins-index.json /tmp/plugins-index.json
-
-          # 创建孤立分支（与所有历史无关），只包含一个 plugins-index.json
-          git checkout --orphan "${BRANCH_NAME}"
-          git rm -rf . > /dev/null 2>&1 || true
-
-          cp /tmp/plugins-index.json .
-          git add plugins-index.json
-          git commit -m "Update plugins index for ${{ env.RELEASE_TAG }}"
-
-          # --force 覆盖远程分支（无论是否存在）
-          git push origin "${BRANCH_NAME}" --force
           echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"
