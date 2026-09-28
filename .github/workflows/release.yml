@@ -51,6 +51,7 @@ jobs:
 
           for dir in */; do
             dir="${dir%/}"
+            [ "$dir" = "release-zips" ] && continue
             plugin_file="${dir}/plugin.json"
             dist_dir="${dir}/dist-plugin"
 
@@ -129,7 +130,12 @@ jobs:
             echo "| id | name | version | size | sha256 |"
             echo "|---|------|---------|------|--------|"
             echo "$NEW_INDEX" | jq -r '.[] | [.id, .name, .version, .sizeBytes, .sha256[0:16]] | @tsv' | \
-              while IFS=
+              awk 'BEGIN {FS="\t"} {printf "| %s | %s | %s | %s bytes | `%s...` |\n", $1, $2, $3, $4, $5}'
+            echo ""
+            echo "---"
+            echo "Download: https://github.com/${REPO}/releases/tag/${RELEASE_TAG}"
+          } > release_body.md
+          echo "Release body 已生成"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -179,9 +185,7 @@ jobs:
           name: Plugins Release ${{ env.RELEASE_TAG }}
           tag_name: ${{ env.RELEASE_TAG }}
           body_path: release_body.md
-          files: |
-            plugins-index.json
-            **/*.zip
+          files: release-zips/*.zip
           draft: false
           prerelease: false
         env:
