@@ -21,6 +21,17 @@ jobs:
         run: |
           echo "RELEASE_TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
+      - name: Fetch previous plugins index
+        shell: bash
+        run: |
+          if git ls-remote --exit-code origin plugins-data 2>/dev/null; then
+            git fetch origin plugins-data --depth=1
+            git show origin/plugins-data:plugins-index.json > /tmp/old-plugins-index.json 2>/dev/null || echo "[]" > /tmp/old-plugins-index.json
+          else
+            echo "[]" > /tmp/old-plugins-index.json
+          fi
+          echo "✅ 已加载上次发布的 plugins-index"
+
       - name: Build plugins
         shell: bash
         run: |
@@ -30,7 +41,13 @@ jobs:
           REPO="${{ github.repository }}"
           RELEASE_BASE_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
 
-          PLUGINS_JSON="[]"
+          # 加载上次发布的索引
+          OLD_INDEX=$(cat /tmp/old-plugins-index.json 2>/dev/null || echo "[]")
+
+          # 创建存放有变动的 ZIP 的目录
+          mkdir -p release-zips
+
+          NEW_INDEX="[]"
 
           for dir in */; do
             dir="${dir%/}"
@@ -54,40 +71,56 @@ jobs:
             ZIP_NAME="${PLUGIN_ID}-${PLUGIN_VERSION}.zip"
             ZIP_PATH="${dir}/${ZIP_NAME}"
 
+            # 构建 ZIP（统一 mtime，排除 extra attributes）
             (cd "$dir" && find "dist-plugin/" -exec touch -t 202401010000 {} \; && zip -X -r "$ZIP_NAME" "dist-plugin/" -x "*.git*" > /dev/null 2>&1)
 
             SHA256_VALUE=$(sha256sum "$ZIP_PATH" | cut -d' ' -f1)
             SIZE_BYTES=$(stat -c%s "$ZIP_PATH")
 
-            DOWNLOAD_URL="${RELEASE_BASE_URL}/${ZIP_NAME}"
-            PROXY_DOWNLOAD_URL="https://gh-proxy.com/${DOWNLOAD_URL}"
+            # 与上次发布的索引比对哈希
+            PLUGIN_KEY="${PLUGIN_ID}-${PLUGIN_VERSION}"
+            OLD_ENTRY=$(echo "$OLD_INDEX" | jq -c --arg id "$PLUGIN_KEY" '.[] | select(.id == $id)')
+            OLD_SHA=$(echo "$OLD_ENTRY" | jq -r '.sha256 // empty')
 
-            # 更新 plugin.json:
-            # 1) sha256 / sizeBytes
-            # 2) downloadSources: 更新 GitHub 源，追加 Github Proxy 源
-            jq --arg sha256 "$SHA256_VALUE" \
-               --argjson size $SIZE_BYTES \
-               --arg url "$DOWNLOAD_URL" \
-               --arg proxy_url "$PROXY_DOWNLOAD_URL" \
-              '(.downloadSources | map(.label) | index("GitHub")) as $github_idx |
-               (.downloadSources | map(.label) | index("Github Proxy")) as $proxy_idx |
-               (if $github_idx then .downloadSources[$github_idx].url = $url
-                else .downloadSources += [{"label": "GitHub", "url": $url, "priority": 1}]
-                end) |
-               (if $proxy_idx then .downloadSources[$proxy_idx].url = $proxy_url
-                else .downloadSources += [{"label": "Github Proxy", "url": $proxy_url, "priority": 2}]
-                end) |
-               .sha256 = $sha256 | .sizeBytes = $size' \
-               "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
+            if [ -n "$OLD_SHA" ] && [ "$OLD_SHA" = "$SHA256_VALUE" ]; then
+              echo "  ⏭️ 哈希未变，跳过发布（复用上次的下载地址）"
+              NEW_INDEX=$(echo "$NEW_INDEX" | jq --argjson entry "$OLD_ENTRY" '. + [$entry]')
+            else
+              echo "  🆕 哈希变化或新插件，准备发布"
 
-            # 收集元数据：直接提取 plugin.json 的必要字段
-            PLUGIN_META=$(jq -c '{id: (.id + "-" + .version), name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, downloadSources}' "$plugin_file")
-            PLUGINS_JSON=$(echo "$PLUGINS_JSON" | jq --argjson meta "$PLUGIN_META" '. + [$meta]')
+              DOWNLOAD_URL="${RELEASE_BASE_URL}/${ZIP_NAME}"
+              PROXY_DOWNLOAD_URL="https://gh-proxy.com/${DOWNLOAD_URL}"
+
+              # 更新 plugin.json:
+              # 1) sha256 / sizeBytes
+              # 2) downloadSources: 更新 GitHub 源，追加 Github Proxy 源
+              jq --arg sha256 "$SHA256_VALUE" \
+                 --argjson size $SIZE_BYTES \
+                 --arg url "$DOWNLOAD_URL" \
+                 --arg proxy_url "$PROXY_DOWNLOAD_URL" \
+                '(.downloadSources | map(.label) | index("GitHub")) as $github_idx |
+                 (.downloadSources | map(.label) | index("Github Proxy")) as $proxy_idx |
+                 (if $github_idx then .downloadSources[$github_idx].url = $url
+                  else .downloadSources += [{"label": "GitHub", "url": $url, "priority": 1}]
+                  end) |
+                 (if $proxy_idx then .downloadSources[$proxy_idx].url = $proxy_url
+                  else .downloadSources += [{"label": "Github Proxy", "url": $proxy_url, "priority": 2}]
+                  end) |
+                 .sha256 = $sha256 | .sizeBytes = $size' \
+                 "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
+
+              # 收集元数据
+              PLUGIN_META=$(jq -c '{id: (.id + "-" + .version), name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, downloadSources}' "$plugin_file")
+              NEW_INDEX=$(echo "$NEW_INDEX" | jq --argjson meta "$PLUGIN_META" '. + [$meta]')
+
+              # 将 ZIP 复制到待发布目录
+              cp "$ZIP_PATH" "release-zips/"
+            fi
           done
 
-          # 生成汇总文件 plugins-index.json
-          echo "$PLUGINS_JSON" > plugins-index.json
-          echo "汇总文件已生成: plugins-index.json"
+          # 生成新的汇总文件 plugins-index.json
+          echo "$NEW_INDEX" > plugins-index.json
+          echo "汇总文件已生成: plugins-index.json（未变动的插件沿用上次的下载地址）"
 
           # 生成 Release body
           {
@@ -95,8 +128,43 @@ jobs:
             echo ""
             echo "| id | name | version | size | sha256 |"
             echo "|---|------|---------|------|--------|"
-            echo "$PLUGINS_JSON" | jq -r '.[] | [.id, .name, .version, .sizeBytes, .sha256[0:16]] | @tsv' | \
-              while IFS=$'\t' read -r id name ver size sha; do
+            echo "$NEW_INDEX" | jq -r '.[] | [.id, .name, .version, .sizeBytes, .sha256[0:16]] | @tsv' | \
+              while IFS=
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Plugins Release ${{ env.RELEASE_TAG }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          body_path: release_body.md
+          files: release-zips/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push plugins index to data branch
+        shell: bash
+        run: |
+          BRANCH_NAME="plugins-data"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 备份汇总文件
+          cp plugins-index.json /tmp/plugins-index.json
+
+          # 创建孤立分支（与所有历史无关），只包含一个 plugins-index.json
+          git checkout --orphan "${BRANCH_NAME}"
+          git rm -rf . > /dev/null 2>&1 || true
+
+          cp /tmp/plugins-index.json .
+          git add plugins-index.json
+          git commit -m "Update plugins index for ${{ env.RELEASE_TAG }}"
+
+          # --force 覆盖远程分支（无论是否存在）
+          git push origin "${BRANCH_NAME}" --force
+          echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"\t' read -r id name ver size sha; do
                 echo "| $id | $name | $ver | ${size} bytes | \`${sha}...\` |"
               done
             echo ""
