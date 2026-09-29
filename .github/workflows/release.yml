@@ -87,8 +87,9 @@ jobs:
               echo "  ⏭️ 哈希未变，跳过发布（复用上次的下载地址）"
               NEW_INDEX=$(echo "$NEW_INDEX" | jq --argjson entry "$OLD_ENTRY" '. + [$entry]')
             else
-              echo "  🆕 哈希变化或新插件，准备发布"
+              echo "  哈希变化或新插件，准备发布"
 
+              PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
               DOWNLOAD_URL="${RELEASE_BASE_URL}/${ZIP_NAME}"
               PROXY_DOWNLOAD_URL="https://gh-proxy.com/${DOWNLOAD_URL}"
 
@@ -99,6 +100,7 @@ jobs:
                  --argjson size $SIZE_BYTES \
                  --arg url "$DOWNLOAD_URL" \
                  --arg proxy_url "$PROXY_DOWNLOAD_URL" \
+                 --arg published_at "$PUBLISHED_AT" \
                 '(.downloadSources | map(.label) | index("GitHub")) as $github_idx |
                  (.downloadSources | map(.label) | index("Github Proxy")) as $proxy_idx |
                  (if $github_idx then .downloadSources[$github_idx].url = $url
@@ -107,11 +109,11 @@ jobs:
                  (if $proxy_idx then .downloadSources[$proxy_idx].url = $proxy_url
                   else .downloadSources += [{"label": "Github Proxy", "url": $proxy_url, "priority": 2}]
                   end) |
-                 .sha256 = $sha256 | .sizeBytes = $size' \
+                 .sha256 = $sha256 | .sizeBytes = $size | .publishedAt = $published_at' \
                  "$plugin_file" > "${plugin_file}.tmp" && mv "${plugin_file}.tmp" "$plugin_file"
 
               # 收集元数据
-              PLUGIN_META=$(jq -c '{id: (.id + "-" + .version), name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, downloadSources}' "$plugin_file")
+              PLUGIN_META=$(jq -c '{id: (.id + "-" + .version), name, version, description, extensions, urlTemplate, sha256, sizeBytes, archiveFormat, publishedAt, downloadSources}' "$plugin_file")
               NEW_INDEX=$(echo "$NEW_INDEX" | jq --argjson meta "$PLUGIN_META" '. + [$meta]')
 
               # 将 ZIP 复制到待发布目录
