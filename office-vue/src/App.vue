@@ -224,7 +224,7 @@ const onPreviewError = (err) => {
         <div class="spinner"></div>
         <span>加载中...</span>
       </div>
-      <div class="zoom-content" :style="{ transform: `scale(${zoom})` }">
+      <div class="zoom-content" :style="{ zoom }">
       <!-- Word 预览 -->
       <DocxPreview
         v-if="fileType === 'word'"
@@ -261,7 +261,7 @@ const onPreviewError = (err) => {
 
 <style scoped>
 .preview-container {
-  min-height: 100vh;
+  height: 100vh;            /* 确定高度：打通 flex 高度链 */
   display: flex;
   flex-direction: column;
   background: #f5f7fa;
@@ -290,9 +290,7 @@ const onPreviewError = (err) => {
   white-space: nowrap;
 }
 
-.toolbar-title .icon {
-  font-size: 22px;
-}
+.toolbar-title .icon { font-size: 22px; }
 
 .toolbar-actions {
   margin-left: auto;
@@ -318,47 +316,22 @@ const onPreviewError = (err) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 28px;
+  border-radius: 6px;
   transition: background 0.2s;
 }
 
-.zoom-control .action-btn {
-  width: 28px;
-  height: 28px;
-  font-size: 16px;
-  border-radius: 6px;
-}
-
-.zoom-control .action-btn:hover {
-  background: #e5e7eb;
-  color: #1f2937;
-}
-
+.zoom-control .action-btn { width: 28px; font-size: 16px; }
 .zoom-control .zoom-value {
   min-width: 52px;
-  height: 28px;
   padding: 0 8px;
   font-size: 13px;
   font-weight: 600;
   color: #374151;
-  border-radius: 6px;
 }
-
-.zoom-control .zoom-value:hover {
-  background: #e5e7eb;
-}
-
-.file-type {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 4px;
-  color: #fff;
-  letter-spacing: 0.5px;
-}
-
-.file-type.word { background: #2b579a; }
-.file-type.excel { background: #217346; }
-.file-type.pdf { background: #b91c1c; }
+.zoom-control .action-btn:hover,
+.zoom-control .zoom-value:hover { background: #e5e7eb; }
+.zoom-control .action-btn:hover { color: #1f2937; }
 
 .status-box {
   flex: 1;
@@ -402,14 +375,8 @@ const onPreviewError = (err) => {
   color: #3b82f6;
 }
 
-.status-box.error {
-  color: #b91c1c;
-}
-
-.status-box.error small {
-  color: #6b7280;
-  margin-top: 12px;
-}
+.status-box.error { color: #b91c1c; }
+.status-box.error small { color: #6b7280; margin-top: 12px; }
 
 .example {
   margin-top: 24px;
@@ -444,12 +411,11 @@ const onPreviewError = (err) => {
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .preview-wrapper {
   flex: 1;
+  min-height: 0;   /* flex 子元素需要这个才能正确 overflow */
   padding: 16px 24px 24px;
   overflow: auto;
   position: relative;
@@ -469,49 +435,41 @@ const onPreviewError = (err) => {
   color: #3b82f6;
 }
 
-/* 缩放内容区：配合 transform 缩放，并让容器跟随缩放后的尺寸撑开 */
-.zoom-content {
-  transform-origin: top left;
-  width: 100%;
+/* 缩放内容区：CSS zoom 会真实影响布局尺寸，父容器可正确撑开 */
+.zoom-content { width: 100%; min-height: 0; }
+
+/* vue-office 组件通用宽度 */
+.preview-wrapper :deep(.vue-office-docx),
+.preview-wrapper :deep(.vue-office-excel),
+.preview-wrapper :deep(.vue-office-pdf) { width: 100%; }
+
+/* === Excel（x-spreadsheet 虚拟滚动需要整条容器链确定 height） === */
+.preview-wrapper.preview-excel .zoom-content {
+  height: 100%;
+  min-height: calc(100% * (1 / var(--zoom, 1)));   /* 补偿 zoom 缩放 */
+}
+.preview-wrapper.preview-excel :deep(.vue-office-excel),
+.preview-wrapper.preview-excel :deep(.x-spreadsheet),
+.preview-wrapper.preview-excel :deep(.x-spreadsheet-sheet) {
+  height: 100% !important;
+  min-height: 100%;
 }
 
-/* 让 vue-office 组件填满容器 */
-.preview-wrapper > :deep(.vue-office-docx),
-.preview-wrapper > :deep(.vue-office-excel),
-.preview-wrapper > :deep(.vue-office-pdf) {
-  width: 100%;
-}
-
-/* PDF 预览修复：让 PDF 组件自身处理滚动，确保虚拟滚动 onScroll 事件能正确触发 */
-.preview-wrapper.preview-pdf {
-  overflow: hidden;
-}
-
+/* === PDF（组件自身处理滚动） === */
+.preview-wrapper.preview-pdf { overflow: hidden; }
+.preview-wrapper.preview-pdf .zoom-content { height: 100%; overflow: hidden; }
 .preview-wrapper.preview-pdf :deep(.vue-office-pdf) {
   height: 100%;
   overflow-y: auto !important;
 }
 
-/* Excel 预览表格样式修复：确保表格内容完全展开 */
-.preview-wrapper :deep(.vue-office-excel) {
-  height: auto !important;
-  min-height: 100%;
-}
-
-.preview-wrapper :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-}
-
+/* 通用表格（docx 等原生 table） */
+.preview-wrapper :deep(table) { width: 100%; border-collapse: collapse; }
 .preview-wrapper :deep(td),
 .preview-wrapper :deep(th) {
   border: 1px solid #d1d5db;
   padding: 6px 10px;
   white-space: nowrap;
 }
-
-.preview-wrapper :deep(th) {
-  background: #f3f4f6;
-  font-weight: 600;
-}
+.preview-wrapper :deep(th) { background: #f3f4f6; font-weight: 600; }
 </style>
