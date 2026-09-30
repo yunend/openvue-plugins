@@ -121,6 +121,10 @@ jobs:
             fi
           done
 
+          # 合并: 保留仅存在于上次索引中的条目（版本变化/已移除插件）,id 为新索引缺失的旧条目
+          NEW_INDEX=$(echo "$NEW_INDEX" | jq --argjson old "$OLD_INDEX" '
+            . + [ $old[] | select(.id as $oid | (map(.id) | index($oid)) == null) ]')
+
           # 生成新的汇总文件 plugins-index.json
           echo "$NEW_INDEX" > plugins-index.json
           echo "汇总文件已生成: plugins-index.json（未变动的插件沿用上次的下载地址）"

@@ -34,6 +34,26 @@ const filePath = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 const fileType = ref('')
+// 预览视图缩放比例（1 = 100%）
+const zoom = ref(1)
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 3
+const ZOOM_STEP = 0.2
+
+// 放大
+const zoomIn = () => {
+  zoom.value = Math.min(ZOOM_MAX, Math.round((zoom.value + ZOOM_STEP) * 100) / 100)
+}
+
+// 缩小
+const zoomOut = () => {
+  zoom.value = Math.max(ZOOM_MIN, Math.round((zoom.value - ZOOM_STEP) * 100) / 100)
+}
+
+// 重置缩放
+const zoomReset = () => {
+  zoom.value = 1
+}
 
 // PDF 静态资源（cmaps）路径，指向本地，避免从 unpkg CDN 加载
 const pdfStaticFileUrl = import.meta.env.BASE_URL
@@ -161,7 +181,14 @@ const onPreviewError = (err) => {
         <span class="icon">📄</span>
         <span>Office 文件预览</span>
       </div>
-      </header>
+      <div class="toolbar-actions">
+        <div v-if="fileType" class="zoom-control">
+          <button class="action-btn" title="缩小" @click="zoomOut">－</button>
+          <button class="zoom-value" title="重置缩放" @click="zoomReset">{{ Math.round(zoom * 100) }}%</button>
+          <button class="action-btn" title="放大" @click="zoomIn">＋</button>
+        </div>
+      </div>
+    </header>
 
 
     <!-- 加载中（尚未确定文件类型） -->
@@ -191,12 +218,13 @@ const onPreviewError = (err) => {
     </div>
 
     <!-- 预览区域（始终渲染，loading 作为遮罩覆盖在上面） -->
-    <div v-else-if="fileType" class="preview-wrapper" :class="`preview-${fileType}`">
+    <div v-else-if="fileType" class="preview-wrapper" :class="`preview-${fileType}`" :style="{ '--zoom': zoom }">
       <!-- 加载中遮罩 -->
       <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
         <span>加载中...</span>
       </div>
+      <div class="zoom-content" :style="{ transform: `scale(${zoom})` }">
       <!-- Word 预览 -->
       <DocxPreview
         v-if="fileType === 'word'"
@@ -226,6 +254,7 @@ const onPreviewError = (err) => {
         @rendered="onPdfRendered"
         @error="onPreviewError"
       />
+      </div>
     </div>
   </div>
 </template>
@@ -263,6 +292,59 @@ const onPreviewError = (err) => {
 
 .toolbar-title .icon {
   font-size: 22px;
+}
+
+.toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.zoom-control button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.zoom-control .action-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+.zoom-control .action-btn:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.zoom-control .zoom-value {
+  min-width: 52px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  border-radius: 6px;
+}
+
+.zoom-control .zoom-value:hover {
+  background: #e5e7eb;
 }
 
 .file-type {
@@ -385,6 +467,12 @@ const onPreviewError = (err) => {
   z-index: 20;
   font-size: 15px;
   color: #3b82f6;
+}
+
+/* 缩放内容区：配合 transform 缩放，并让容器跟随缩放后的尺寸撑开 */
+.zoom-content {
+  transform-origin: top left;
+  width: 100%;
 }
 
 /* 让 vue-office 组件填满容器 */
