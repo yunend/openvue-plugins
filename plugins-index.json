@@ -1,0 +1,89 @@
+[
+  {
+    "id": "office-easy-0.0.1",
+    "name": "Office 简单查看器 / Office Easy Viewer",
+    "version": "0.0.1",
+    "description": "在线简易Office 文档查看器 / Office Viewer Easy Online",
+    "extensions": [
+      "doc",
+      "docx",
+      "ppt",
+      "pptx",
+      "xls",
+      "xlsx"
+    ],
+    "urlTemplate": "/plugins/{pluginId}/?path={publicPath}",
+    "sha256": "da5658f67408d9a022d9a5a4bb76c1a66c84b5d4b5ea5481eacce79228807da3",
+    "sizeBytes": 734,
+    "archiveFormat": "zip",
+    "publishedAt": "2026-09-29T12:39:14Z",
+    "downloadSources": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-easy-0.0.1.zip",
+        "priority": 1
+      },
+      {
+        "label": "Github Proxy",
+        "url": "https://gh-proxy.com/https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-easy-0.0.1.zip",
+        "priority": 2
+      }
+    ]
+  },
+  {
+    "id": "office-vue-1.1.0",
+    "name": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+    "version": "1.1.0",
+    "description": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+    "extensions": [
+      "docx",
+      "pdf",
+      "xlsx"
+    ],
+    "urlTemplate": "/plugins/{pluginId}/?path={publicPath}",
+    "sha256": "b166ae4dccca5b4c1cdf88baa93d68dc6d498dbf85482ef17bf05acea29a86c9",
+    "sizeBytes": 1350659,
+    "archiveFormat": "zip",
+    "publishedAt": "2026-09-30T12:46:47Z",
+    "downloadSources": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/yunend/openvue-plugins/releases/download/v1.0.2/office-vue-1.1.0.zip",
+        "priority": 1
+      },
+      {
+        "label": "Github Proxy",
+        "url": "https://gh-proxy.com/https://github.com/yunend/openvue-plugins/releases/download/v1.0.2/office-vue-1.1.0.zip",
+        "priority": 2
+      }
+    ]
+  },
+  {
+    "id": "office-vue-1.0.0",
+    "name": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+    "version": "1.0.0",
+    "description": "Office 文档查看器 (Vue) / Office Viewer (Vue)",
+    "extensions": [
+      "docx",
+      "pdf",
+      "xlsx"
+    ],
+    "urlTemplate": "/plugins/{pluginId}/?path={publicPath}",
+    "sha256": "a986ccff62f09ae15c13f4ca45d38609d04ea7aa8848d8ab91c23e3d41e9ec93",
+    "sizeBytes": 1350246,
+    "archiveFormat": "zip",
+    "publishedAt": "2026-09-29T12:39:14Z",
+    "downloadSources": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-vue-1.0.0.zip",
+        "priority": 1
+      },
+      {
+        "label": "Github Proxy",
+        "url": "https://gh-proxy.com/https://github.com/yunend/openvue-plugins/releases/download/v1.0.0/office-vue-1.0.0.zip",
+        "priority": 2
+      }
+    ]
+  }
+]
