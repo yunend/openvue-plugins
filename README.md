@@ -1,5 +1,7 @@
 # openvue-plugins
 
+[**English**](readme.en.md) | [中文](README.md)
+
 openvue 桌面应用的插件库，目前内置 `office-vue`、`office-easy` 两个 Office 预览插件。
 
 ## 结构
