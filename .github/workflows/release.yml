@@ -221,7 +221,7 @@ jobs:
           chmod 600 /tmp/gitee-creds
 
           # 确保所有分支都在本地 refs/heads/ 下（checkout 默认只拉当前 ref）
-          git fetch origin --no-tags --depth=0 "+refs/heads/*:refs/heads/*"
+          git fetch origin --no-tags "+refs/heads/*:refs/heads/*"
 
           # 仅推送本地分支 (refs/heads) 和标签 (refs/tags)
           # 不推送 refs/remotes/*（远端跟踪引用），避免被当作远程分支名
