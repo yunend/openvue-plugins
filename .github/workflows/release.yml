@@ -324,10 +324,11 @@ jobs:
             echo "  ✅ Release id=${RELEASE_ID}"
 
             # 下载 GitHub 附件并上传
+            # 注意：$ASSETS 已经是数组本身，不要再 .assets[i]，直接 [i]
             ASSET_COUNT=$(echo "$ASSETS" | jq 'length')
             for i in $(seq 0 $((ASSET_COUNT - 1))); do
-              ASSET_URL=$(echo "$ASSETS" | jq -r ".assets[${i}].browser_download_url")
-              ASSET_NAME=$(echo "$ASSETS" | jq -r ".assets[${i}].name")
+              ASSET_URL=$(echo "$ASSETS" | jq -r ".[${i}].browser_download_url")
+              ASSET_NAME=$(echo "$ASSETS" | jq -r ".[${i}].name")
               echo "  ↓ 下载 ${ASSET_NAME}"
 
               curl -sL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
