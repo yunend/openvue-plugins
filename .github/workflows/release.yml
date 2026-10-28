@@ -201,7 +201,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-files
-          path: release-zips
+          path: .
 
       - name: Mirror code to Gitee
         shell: bash
@@ -238,7 +238,7 @@ jobs:
           OWNER="wangwangqin523"
           REPO="openvue-plugins"
           API="https://gitee.com/api/v5/repos/${OWNER}/${REPO}"
-          BODY_FILE="release-zips/release_body.md"
+          BODY_FILE="release_body.md"
 
           # 读取 body
           BODY=$(cat "$BODY_FILE" 2>/dev/null || echo "## Plugins Release ${TAG_NAME}")
