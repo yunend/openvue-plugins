@@ -210,7 +210,6 @@ jobs:
         run: |
           set -e
           GITEE_REPO="https://gitee.com/wangwangqin523/openvue-plugins.git"
-          GITEE_AUTH="https://wangwangqin523:${GITEE_TOKEN}@gitee.com/wangwangqin523/openvue-plugins.git"
 
           git config user.name "wangwangqin523"
           git config user.email "wangwangqin523@gitee.com"
@@ -221,8 +220,12 @@ jobs:
           echo "https://wangwangqin523:${GITEE_TOKEN}@gitee.com" > /tmp/gitee-creds
           chmod 600 /tmp/gitee-creds
 
-          # 镜像所有分支和标签
-          git push --mirror gitee
+          # 确保所有分支都在本地 refs/heads/ 下（checkout 默认只拉当前 ref）
+          git fetch origin --no-tags --depth=0 "+refs/heads/*:refs/heads/*"
+
+          # 仅推送本地分支 (refs/heads) 和标签 (refs/tags)
+          # 不推送 refs/remotes/*（远端跟踪引用），避免被当作远程分支名
+          git push gitee "+refs/heads/*:refs/heads/*" "+refs/tags/*:refs/tags/*"
           echo "✅ 代码已镜像同步到 Gitee"
 
       - name: Create Gitee Release
