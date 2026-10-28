@@ -285,12 +285,28 @@ jobs:
 
           # 3. 上传附件
           cd release-zips
+          UPLOAD_FAILED=0
           for zip in *.zip; do
             [ -f "$zip" ] || continue
-            echo "上传附件: $zip"
-            curl -s -X POST "${API}/releases/${RELEASE_ID}/attach_files" \
+            echo "上传附件: $zip ($(du -h "$zip" | cut -f1))"
+            # -w '\nHTTP:%{http_code}' 让 curl 在末尾额外输出一行 HTTP 状态码
+            UPLOAD_RESP=$(curl -s -X POST "${API}/releases/${RELEASE_ID}/attach_files" \
               -F "access_token=${GITEE_TOKEN}" \
               -F "file=@${zip}" \
-              -F "name=${zip}" > /dev/null
+              -F "name=${zip}" \
+              -w '\nHTTP:%{http_code}')
+            HTTP_CODE=$(echo "$UPLOAD_RESP" | tail -n1 | sed 's/HTTP://')
+            BODY=$(echo "$UPLOAD_RESP" | sed '$d')
+            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+              echo "❌ 上传失败 (HTTP $HTTP_CODE): $zip"
+              echo "   响应: $BODY"
+              UPLOAD_FAILED=1
+            else
+              echo "   ✅ HTTP $HTTP_CODE"
+            fi
           done
-          echo "✅ 所有附件已上传到 Gitee Release"
+          if [ "$UPLOAD_FAILED" -eq 1 ]; then
+            echo "⚠️ 部分附件上传失败，请检查上方日志"
+          else
+            echo "✅ 所有附件已上传到 Gitee Release"
+          fi
