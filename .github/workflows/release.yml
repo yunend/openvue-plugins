@@ -228,120 +228,67 @@ jobs:
           git push gitee "+refs/heads/*:refs/heads/*" "+refs/tags/*:refs/tags/*"
           echo "✅ 代码已镜像同步到 Gitee"
 
-      - name: Sync all GitHub releases to Gitee
+      - name: Create Gitee Release
         shell: bash
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -eo pipefail
+          set -e
+          TAG_NAME="${GITHUB_REF_NAME}"
+          OWNER="wangwangqin523"
+          REPO="openvue-plugins"
+          API="https://gitee.com/api/v5/repos/${OWNER}/${REPO}"
+          BODY_FILE="release-zips/release_body.md"
 
-          GITEE_OWNER="wangwangqin523"
-          GITEE_REPO="openvue-plugins"
-          GITEE_API="https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}"
+          # 读取 body
+          BODY=$(cat "$BODY_FILE" 2>/dev/null || echo "## Plugins Release ${TAG_NAME}")
 
-          GH_OWNER="${GITHUB_REPOSITORY%%/*}"
-          GH_REPO="${GITHUB_REPOSITORY##*/}"
-          GH_API="https://api.github.com/repos/${GH_OWNER}/${GH_REPO}"
+          # 1. 检查 release 是否已存在
+          EXISTING=$(curl -s "${API}/releases?access_token=${GITEE_TOKEN}&tag_name=${TAG_NAME}&per_page=1")
+          RELEASE_ID=$(echo "$EXISTING" | jq -r '.[0].id // empty')
 
-          TMP_DIR=$(mktemp -d)
-          trap "rm -rf $TMP_DIR" EXIT
+          if [ -n "$RELEASE_ID" ]; then
+            echo "⏭️  Gitee Release 已存在 (tag=${TAG_NAME}, id=${RELEASE_ID})，跳过"
+            exit 0
+          fi
 
-          # ========== 1. 拉取 GitHub 所有 releases ==========
-          echo "🔍 拉取 GitHub releases..."
-          GH_RELEASES=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            "${GH_API}/releases?per_page=100")
-          HTTP_CODE=$(echo "$GH_RELEASES" | tail -n1)
-          GH_RELEASES=$(echo "$GH_RELEASES" | sed '$d')
-          echo "  GitHub API HTTP: $HTTP_CODE"
+          echo "🆕 创建新的 Gitee Release (tag=${TAG_NAME})"
 
-          TOTAL=$(echo "$GH_RELEASES" | jq 'length')
-          echo "📦 GitHub 共有 ${TOTAL} 个 release"
+          # Gitee API 要求 target_commitish（目标分支或 commit SHA）
+          # 用当前 checkout 的 HEAD，tag 就绑在这个 commit 上
+          TARGET_SHA=$(git rev-parse HEAD)
 
-          # ========== 2. 逐个同步（用 process substitution 避免 subshell 吞错误） ==========
-          while IFS= read -r rel; do
-            [ -z "$rel" ] && continue
+          # 2. 创建 release
+          #    用 jq 构建合法双引号 JSON，避免 shell 引号/换行破坏结构
+          #    access_token 放 URL query（Gitee API 两种都支持，query 更可靠）
+          PAYLOAD=$(jq -n \
+            --arg tag "$TAG_NAME" \
+            --arg name "Plugins Release ${TAG_NAME}" \
+            --arg body "$BODY" \
+            --arg target "$TARGET_SHA" \
+            '{tag_name: $tag, target_commitish: $target, name: $name, body: $body, draft: false, prerelease: false}')
 
-            TAG=$(echo "$rel" | jq -r '.tag_name')
-            NAME=$(echo "$rel" | jq -r '.name // "Release ${TAG}"')
-            BODY=$(echo "$rel" | jq -r '.body // ""')
-            DRAFT=$(echo "$rel" | jq -r '.draft')
-            PRERELEASE=$(echo "$rel" | jq -r '.prerelease')
-            ASSETS=$(echo "$rel" | jq -c '.assets // []')
+          CREATE_RESP=$(curl -s -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
 
-            if [ "$DRAFT" = "true" ] || [ "$PRERELEASE" = "true" ]; then
-              echo "⏭️  跳过 ${TAG} (draft/prerelease)"
-              continue
-            fi
+          echo "Create response: $CREATE_RESP"
 
-            # 检查 Gitee 是否已存在
-            # 注意：Gitee API 的 ?tag_name 参数不生效（忽略过滤），
-            # 必须拉全量后在本地用 jq 精确匹配 tag_name
-            EXISTING=$(curl -s "${GITEE_API}/releases?access_token=${GITEE_TOKEN}&per_page=100")
-            RELEASE_ID=$(echo "$EXISTING" | jq -r --arg t "$TAG" '.[] | select(.tag_name == $t) | .id' | head -n1)
+          RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
+          if [ -z "$RELEASE_ID" ]; then
+            echo "❌ 创建 Gitee Release 失败"
+            exit 1
+          fi
+          echo "✅ Gitee Release 创建成功 (id=${RELEASE_ID})"
 
-            if [ -n "$RELEASE_ID" ]; then
-              echo "⏭️  ${TAG} 已存在于 Gitee (id=${RELEASE_ID})"
-              continue
-            fi
-
-            echo "🆕 同步 ${TAG} ..."
-
-            # 拿 commit SHA —— 加 ^{commit} 确保 annotated tag 也能拿到 commit
-            TARGET_SHA=$(git rev-parse "refs/tags/${TAG}^{commit}" 2>/dev/null || echo "")
-            if [ -z "$TARGET_SHA" ]; then
-              echo "  本地没找到 tag，从 GitHub API 拿 SHA..."
-              TAG_INFO=$(curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-                "${GH_API}/git/refs/tags/${TAG}")
-              TARGET_SHA=$(echo "$TAG_INFO" | jq -r '.object.sha // .commit.sha // empty')
-            fi
-            if [ -z "$TARGET_SHA" ]; then
-              echo "  ❌ 无法获取 ${TAG} 的 commit SHA"
-              continue
-            fi
-            echo "  target SHA: ${TARGET_SHA}"
-
-            # 创建 Gitee Release
-            PAYLOAD=$(jq -n \
-              --arg tag "$TAG" \
-              --arg name "$NAME" \
-              --arg body "$BODY" \
-              --arg target "$TARGET_SHA" \
-              '{tag_name: $tag, target_commitish: $target, name: $name, body: $body, draft: false, prerelease: false}')
-
-            CREATE_RAW=$(curl -s -w '\n%{http_code}' -X POST "${GITEE_API}/releases?access_token=${GITEE_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$PAYLOAD")
-            CREATE_CODE=$(echo "$CREATE_RAW" | tail -n1)
-            CREATE_RESP=$(echo "$CREATE_RAW" | sed '$d')
-            echo "  Gitee 创建响应 (HTTP ${CREATE_CODE}): ${CREATE_RESP:0:200}"
-
-            RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
-            if [ -z "$RELEASE_ID" ]; then
-              echo "  ❌ 创建 Release 失败"
-              continue
-            fi
-            echo "  ✅ Release id=${RELEASE_ID}"
-
-            # 下载 GitHub 附件并上传
-            # 注意：$ASSETS 已经是数组本身，不要再 .assets[i]，直接 [i]
-            ASSET_COUNT=$(echo "$ASSETS" | jq 'length')
-            for i in $(seq 0 $((ASSET_COUNT - 1))); do
-              ASSET_URL=$(echo "$ASSETS" | jq -r ".[${i}].browser_download_url")
-              ASSET_NAME=$(echo "$ASSETS" | jq -r ".[${i}].name")
-              echo "  ↓ 下载 ${ASSET_NAME}"
-
-              curl -sL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-                -o "${TMP_DIR}/${ASSET_NAME}" "$ASSET_URL"
-
-              echo "  ↑ 上传 ${ASSET_NAME}"
-              curl -s -X POST "${GITEE_API}/releases/${RELEASE_ID}/attach_files" \
-                -F "access_token=${GITEE_TOKEN}" \
-                -F "file=@${TMP_DIR}/${ASSET_NAME}" \
-                -F "name=${ASSET_NAME}" > /dev/null
-            done
-            echo "  ✅ ${TAG} 完成"
-
-          done < <(echo "$GH_RELEASES" | jq -c '.[]')
-
-          echo "✅ 所有 release 同步完成"
+          # 3. 上传附件
+          cd release-zips
+          for zip in *.zip; do
+            [ -f "$zip" ] || continue
+            echo "上传附件: $zip"
+            curl -s -X POST "${API}/releases/${RELEASE_ID}/attach_files" \
+              -F "access_token=${GITEE_TOKEN}" \
+              -F "file=@${zip}" \
+              -F "name=${zip}" > /dev/null
+          done
+          echo "✅ 所有附件已上传到 Gitee Release"
