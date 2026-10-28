@@ -177,3 +177,109 @@ jobs:
           # --force 覆盖远程分支（无论是否存在）
           git push origin "${BRANCH_NAME}" --force
           echo "✅ 汇总文件已推送到分支: ${BRANCH_NAME}"
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: |
+            release-zips/*.zip
+            release_body.md
+          if-no-files-found: error
+
+  sync-to-gitee:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release-zips
+
+      - name: Mirror code to Gitee
+        shell: bash
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          set -e
+          GITEE_REPO="https://gitee.com/wangwangqin523/openvue-plugins.git"
+          GITEE_AUTH="https://wangwangqin523:${GITEE_TOKEN}@gitee.com/wangwangqin523/openvue-plugins.git"
+
+          git config user.name "wangwangqin523"
+          git config user.email "wangwangqin523@gitee.com"
+
+          # 使用 credential 方式避免 token 出现在 remote URL 的 git log 中
+          git remote add gitee "$GITEE_REPO"
+          git config credential.helper "store --file=/tmp/gitee-creds"
+          echo "https://wangwangqin523:${GITEE_TOKEN}@gitee.com" > /tmp/gitee-creds
+          chmod 600 /tmp/gitee-creds
+
+          # 镜像所有分支和标签
+          git push --mirror gitee
+          echo "✅ 代码已镜像同步到 Gitee"
+
+      - name: Create Gitee Release
+        shell: bash
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          set -e
+          TAG_NAME="${GITHUB_REF_NAME}"
+          OWNER="wangwangqin523"
+          REPO="openvue-plugins"
+          API="https://gitee.com/api/v5/repos/${OWNER}/${REPO}"
+          BODY_FILE="release-zips/release_body.md"
+
+          # 读取 body
+          BODY=$(cat "$BODY_FILE" 2>/dev/null || echo "## Plugins Release ${TAG_NAME}")
+
+          # 1. 检查 release 是否已存在
+          EXISTING=$(curl -s "${API}/releases?access_token=${GITEE_TOKEN}&tag_name=${TAG_NAME}&per_page=1")
+          RELEASE_ID=$(echo "$EXISTING" | jq -r '.[0].id // empty')
+
+          if [ -n "$RELEASE_ID" ]; then
+            echo "⏭️  Gitee Release 已存在 (tag=${TAG_NAME}, id=${RELEASE_ID})，跳过"
+            exit 0
+          fi
+
+          echo "🆕 创建新的 Gitee Release (tag=${TAG_NAME})"
+
+          # 2. 创建 release
+          CREATE_RESP=$(curl -s -X POST "${API}/releases" \
+            -H "Content-Type: application/json" \
+            -d "{
+              'access_token': '${GITEE_TOKEN}',
+              'tag_name': '${TAG_NAME}',
+              'name': 'Plugins Release ${TAG_NAME}',
+              'body': $(echo "$BODY" | jq -Rs .),
+              'draft': false,
+              'prerelease': false
+            }")
+
+          echo "Create response: $CREATE_RESP"
+
+          RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
+          if [ -z "$RELEASE_ID" ]; then
+            echo "❌ 创建 Gitee Release 失败"
+            exit 1
+          fi
+          echo "✅ Gitee Release 创建成功 (id=${RELEASE_ID})"
+
+          # 3. 上传附件
+          cd release-zips
+          for zip in *.zip; do
+            [ -f "$zip" ] || continue
+            echo "上传附件: $zip"
+            curl -s -X POST "${API}/releases/${RELEASE_ID}/attach_files" \
+              -F "access_token=${GITEE_TOKEN}" \
+              -F "file=@${zip}" \
+              -F "name=${zip}" > /dev/null
+          done
+          echo "✅ 所有附件已上传到 Gitee Release"
