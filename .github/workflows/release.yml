@@ -244,8 +244,10 @@ jobs:
           BODY=$(cat "$BODY_FILE" 2>/dev/null || echo "## Plugins Release ${TAG_NAME}")
 
           # 1. 检查 release 是否已存在
-          EXISTING=$(curl -s "${API}/releases?access_token=${GITEE_TOKEN}&tag_name=${TAG_NAME}&per_page=1")
-          RELEASE_ID=$(echo "$EXISTING" | jq -r '.[0].id // empty')
+          # 注意：Gitee API 的 ?tag_name 参数不生效，忽略过滤，
+          # 必须拉全量后在本地用 jq 精确匹配 tag_name
+          ALL_GITEE_RELEASES=$(curl -s "${API}/releases?access_token=${GITEE_TOKEN}&per_page=100")
+          RELEASE_ID=$(echo "$ALL_GITEE_RELEASES" | jq -r --arg t "$TAG_NAME" '.[] | select(.tag_name == $t) | .id' | head -n1)
 
           if [ -n "$RELEASE_ID" ]; then
             echo "⏭️  Gitee Release 已存在 (tag=${TAG_NAME}, id=${RELEASE_ID})，跳过"
