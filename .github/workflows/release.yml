@@ -255,16 +255,17 @@ jobs:
           echo "🆕 创建新的 Gitee Release (tag=${TAG_NAME})"
 
           # 2. 创建 release
-          CREATE_RESP=$(curl -s -X POST "${API}/releases" \
+          #    用 jq 构建合法双引号 JSON，避免 shell 引号/换行破坏结构
+          #    access_token 放 URL query（Gitee API 两种都支持，query 更可靠）
+          PAYLOAD=$(jq -n \
+            --arg tag "$TAG_NAME" \
+            --arg name "Plugins Release ${TAG_NAME}" \
+            --arg body "$BODY" \
+            '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')
+
+          CREATE_RESP=$(curl -s -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{
-              'access_token': '${GITEE_TOKEN}',
-              'tag_name': '${TAG_NAME}',
-              'name': 'Plugins Release ${TAG_NAME}',
-              'body': $(echo "$BODY" | jq -Rs .),
-              'draft': false,
-              'prerelease': false
-            }")
+            -d "$PAYLOAD")
 
           echo "Create response: $CREATE_RESP"
 
