@@ -254,6 +254,10 @@ jobs:
 
           echo "🆕 创建新的 Gitee Release (tag=${TAG_NAME})"
 
+          # Gitee API 要求 target_commitish（目标分支或 commit SHA）
+          # 用当前 checkout 的 HEAD，tag 就绑在这个 commit 上
+          TARGET_SHA=$(git rev-parse HEAD)
+
           # 2. 创建 release
           #    用 jq 构建合法双引号 JSON，避免 shell 引号/换行破坏结构
           #    access_token 放 URL query（Gitee API 两种都支持，query 更可靠）
@@ -261,7 +265,8 @@ jobs:
             --arg tag "$TAG_NAME" \
             --arg name "Plugins Release ${TAG_NAME}" \
             --arg body "$BODY" \
-            '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')
+            --arg target "$TARGET_SHA" \
+            '{tag_name: $tag, target_commitish: $target, name: $name, body: $body, draft: false, prerelease: false}')
 
           CREATE_RESP=$(curl -s -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
             -H "Content-Type: application/json" \
