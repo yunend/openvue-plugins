@@ -24,9 +24,7 @@ const PdfPreview = defineAsyncComponent(() =>
 // 支持的文件后缀 -> 类型映射
 const SUPPORTED_EXT = {
   docx: 'word',
-  doc: 'word',
   xlsx: 'excel',
-  xls: 'excel',
   pdf: 'pdf'
 }
 
